@@ -1,0 +1,155 @@
+import * as cdk from 'aws-cdk-lib';
+import * as lambda from 'aws-cdk-lib/aws-lambda';
+import * as sfn from 'aws-cdk-lib/aws-stepfunctions';
+import * as tasks from 'aws-cdk-lib/aws-stepfunctions-tasks';
+import * as nodejs from 'aws-cdk-lib/aws-lambda-nodejs';
+import { Construct } from 'constructs';
+import * as path from 'path';
+// import * as sqs from 'aws-cdk-lib/aws-sqs';
+
+export class OrchestrationExampleStack extends cdk.Stack {
+  constructor(scope: Construct, id: string, props?: cdk.StackProps) {
+    super(scope, id, props);
+
+    // The code that defines your stack goes here
+
+    // Lambda Functions
+    const validationFunction = new nodejs.NodejsFunction(this, 'ValidationFunction', {
+      entry: path.join(__dirname, '../src/lambdas/validation/index.ts'),
+      handler: 'handler',
+      runtime: lambda.Runtime.NODEJS_18_X,
+    });
+
+    const creditCheckFunction = new nodejs.NodejsFunction(this, 'CreditCheckFunction', {
+      entry: path.join(__dirname, '../src/lambdas/credit-check/index.ts'),
+      handler: 'handler',
+      runtime: lambda.Runtime.NODEJS_18_X,
+    });
+
+    const incomeVerificationFunction = new nodejs.NodejsFunction(this, 'IncomeVerificationFunction', {
+      entry: path.join(__dirname, '../src/lambdas/income-verification/index.ts'),
+      handler: 'handler',
+      runtime: lambda.Runtime.NODEJS_18_X,
+    });
+
+    const riskAssessmentFunction = new nodejs.NodejsFunction(this, 'RiskAssessmentFunction', {
+      entry: path.join(__dirname, '../src/lambdas/risk-assessment/index.ts'),
+      handler: 'handler',
+      runtime: lambda.Runtime.NODEJS_18_X,
+    });
+
+    const loanDecisionFunction = new nodejs.NodejsFunction(this, 'LoanDecisionFunction', {
+      entry: path.join(__dirname, '../src/lambdas/loan-decision/index.ts'),
+      handler: 'handler',
+      runtime: lambda.Runtime.NODEJS_18_X,
+    });
+
+    const notificationFunction = new nodejs.NodejsFunction(this, 'NotificationFunction', {
+      entry: path.join(__dirname, '../src/lambdas/notification/index.ts'),
+      handler: 'handler',
+      runtime: lambda.Runtime.NODEJS_18_X,
+    });
+
+    // Step Functions Definition
+    const validateApplication = new tasks.LambdaInvoke(this, 'Validate Application', {
+      lambdaFunction: validationFunction,
+      resultPath: '$.validationResult',
+    });
+
+    const checkCredit = new tasks.LambdaInvoke(this, 'Check Credit', {
+      lambdaFunction: creditCheckFunction,
+      resultPath: '$.creditCheckResult',
+    });
+
+    const verifyIncome = new tasks.LambdaInvoke(this, 'Verify Income', {
+      lambdaFunction: incomeVerificationFunction,
+      resultPath: '$.incomeVerificationResult',
+    });
+
+    // Create a Pass state to prepare data for risk assessment
+    const prepareRiskAssessment = new sfn.Pass(this, 'Prepare Risk Assessment', {
+      parameters: {
+        'application': sfn.JsonPath.stringAt('$[0]'),
+        'creditCheckResult': sfn.JsonPath.stringAt('$[0].creditCheckResult'),
+        'incomeVerificationResult': sfn.JsonPath.stringAt('$[1].incomeVerificationResult')
+      }
+    });
+
+    const assessRisk = new tasks.LambdaInvoke(this, 'Assess Risk', {
+      lambdaFunction: riskAssessmentFunction,
+      resultPath: '$.riskAssessmentResult',
+      inputPath: '$',
+    });
+
+    const makeLoanDecision = new tasks.LambdaInvoke(this, 'Make Loan Decision', {
+      lambdaFunction: loanDecisionFunction,
+      resultPath: '$.loanDecision',
+      inputPath: '$',
+    });
+
+    const sendNotification = new tasks.LambdaInvoke(this, 'Send Notification', {
+      lambdaFunction: notificationFunction,
+      resultPath: '$.notificationResult',
+      inputPath: '$',
+    });
+
+    // Error handling
+    const notifyError = new tasks.LambdaInvoke(this, 'Notify Error', {
+      lambdaFunction: notificationFunction,
+      resultPath: '$.notificationResult',
+      payload: sfn.TaskInput.fromObject({
+        application: sfn.JsonPath.stringAt('$'),
+        decision: {
+          approved: false,
+          reason: 'Application processing error occurred'
+        }
+      }),
+    });
+
+    // Workflow Definition
+    const definition = validateApplication
+      .next(new sfn.Choice(this, 'Is Application Valid?')
+        .when(sfn.Condition.booleanEquals('$.validationResult.Payload.isValid', true), 
+          new sfn.Parallel(this, 'Parallel Processing')
+            .branch(checkCredit)
+            .branch(verifyIncome)
+            .next(prepareRiskAssessment)
+            .next(assessRisk)
+            .next(makeLoanDecision)
+            .next(sendNotification))
+        .otherwise(
+          new tasks.LambdaInvoke(this, 'Notify Validation Failure', {
+            lambdaFunction: notificationFunction,
+            resultPath: '$.notificationResult',
+            payload: sfn.TaskInput.fromObject({
+              application: sfn.JsonPath.stringAt('$'),
+              decision: {
+                approved: false,
+                reason: sfn.JsonPath.stringAt('$.validationResult.Payload.errors[0]')
+              }
+            }),
+          })
+        )
+      );
+
+    // Create State Machine
+    const stateMachine = new sfn.StateMachine(this, 'LoanProcessingStateMachine', {
+      definition,
+      timeout: cdk.Duration.minutes(5),
+      tracingEnabled: true,
+      stateMachineType: sfn.StateMachineType.STANDARD,
+    });
+
+    // Add error handling to State Machine
+    stateMachine.addToRolePolicy(new cdk.aws_iam.PolicyStatement({
+      actions: ['lambda:InvokeFunction'],
+      resources: [notificationFunction.functionArn],
+    }));
+
+    // Output the state machine ARN
+    new cdk.CfnOutput(this, 'StateMachineArn', {
+      value: stateMachine.stateMachineArn,
+      description: 'State machine ARN',
+    });
+  }
+}
