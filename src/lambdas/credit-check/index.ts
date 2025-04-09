@@ -1,26 +1,52 @@
-import { LoanApplication, CreditCheckResult } from '../../types/loan-types';
+import { 
+  CreditCheckResult,
+  CustomerData
+} from '../../types/loan-types';
 
-export const handler = async (event: LoanApplication): Promise<CreditCheckResult> => {
-  // In a real implementation, this would call a credit bureau API
-  // This is a simplified simulation
-  const simulateCreditCheck = (customerId: string): CreditCheckResult => {
-    // Generate a deterministic but seemingly random score based on customerId
-    const hash = customerId.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
-    const creditScore = 300 + (hash % 550); // Score between 300 and 850
-    
-    return {
-      creditScore,
-      hasBankruptcy: hash % 20 === 0, // 5% chance of bankruptcy
-      outstandingLoans: hash % 5 // 0-4 outstanding loans
-    };
-  };
+interface CreditCheckEvent {
+  customerId: string;
+  customerData?: CustomerData;
+}
 
-  try {
-    // Simulate API latency
-    await new Promise(resolve => setTimeout(resolve, 500));
-    return simulateCreditCheck(event.customerId);
-  } catch (error) {
-    console.error('Error performing credit check:', error);
-    throw new Error('Failed to perform credit check');
+export const handler = async (event: CreditCheckEvent): Promise<CreditCheckResult> => {
+  // Log the event object for CloudWatch
+  console.log('Credit Check Input:', JSON.stringify(event, null, 2));
+  
+  const { customerId, customerData } = event;
+  
+  // If customer data is not provided, we'll need to fetch it from the customer data service
+  // This would be handled by the Step Functions workflow
+  
+  if (!customerData) {
+    throw new Error('Customer data is required for credit check');
   }
+  
+  // In a real implementation, this would call an external credit bureau API
+  // For this example, we'll use the customer data directly
+  
+  // Simulate API latency
+  await new Promise(resolve => setTimeout(resolve, 500));
+  
+  // Use the customer's credit score from the customer data
+  const creditScore = customerData.creditScore;
+  
+  // Determine credit rating based on score
+  let creditRating: 'Excellent' | 'Good' | 'Fair' | 'Poor';
+  if (creditScore >= 750) {
+    creditRating = 'Excellent';
+  } else if (creditScore >= 700) {
+    creditRating = 'Good';
+  } else if (creditScore >= 650) {
+    creditRating = 'Fair';
+  } else {
+    creditRating = 'Poor';
+  }
+  
+  return {
+    creditScore,
+    creditRating,
+    hasBankruptcy: customerData.hasBankruptcy,
+    outstandingLoans: customerData.outstandingLoans,
+    lastUpdated: new Date().toISOString()
+  };
 }; 

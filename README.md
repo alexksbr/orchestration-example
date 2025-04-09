@@ -6,13 +6,14 @@ This project demonstrates a loan processing workflow implemented using AWS Step 
 
 The workflow simulates a loan application process with the following steps:
 
-1. **Application Validation** - Validates the loan application data
-2. **Parallel Processing**:
+1. **Customer Data Retrieval** - Fetches customer data from a stateful microservice
+2. **Application Validation** - Validates the loan application data
+3. **Parallel Processing**:
    - **Credit Check** - Checks the applicant's credit score and history
    - **Income Verification** - Verifies the applicant's income and employment
-3. **Risk Assessment** - Evaluates the overall risk based on credit and income data
-4. **Loan Decision** - Makes the final approval decision
-5. **Notification** - Sends the result to the applicant
+4. **Risk Assessment** - Evaluates the overall risk based on credit and income data
+5. **Loan Decision** - Makes the final approval decision
+6. **Notification** - Sends the result to the applicant
 
 ## Project Structure
 
@@ -22,6 +23,7 @@ The workflow simulates a loan application process with the following steps:
 ├── lib/                      # CDK stack definition
 ├── src/                      # Source code
 │   ├── lambdas/              # Lambda function implementations
+│   │   ├── customer-data/    # Customer data microservice
 │   │   ├── validation/       # Application validation
 │   │   ├── credit-check/     # Credit check
 │   │   ├── income-verification/ # Income verification
@@ -73,10 +75,7 @@ After deployment, you can test the workflow in the AWS Step Functions console:
   "customerId": "CUST456",
   "amount": 50000,
   "term": 36,
-  "purpose": "Home Improvement",
-  "employmentStatus": "Full-time",
-  "annualIncome": 120000,
-  "monthlyExpenses": 3000
+  "purpose": "Home Improvement"
 }
 ```
 
@@ -84,18 +83,25 @@ After deployment, you can test the workflow in the AWS Step Functions console:
 
 ## Workflow Details
 
+### Customer Data Service
+- Acts as a stateful microservice storing customer information
+- Provides customer data to other services in the workflow
+- In a real implementation, this would be a DynamoDB-backed service
+- Currently uses an in-memory database for demonstration purposes
+
 ### Application Validation
 - Validates the loan application data
+- Uses customer data to perform additional validations
 - Checks if the amount is within acceptable limits
 - Returns validation result with any errors
 
 ### Credit Check
-- Simulates checking the applicant's credit score
+- Uses customer data to check the applicant's credit score
 - Evaluates bankruptcy history and outstanding loans
 - Returns credit check results
 
 ### Income Verification
-- Verifies the applicant's income and employment status
+- Uses customer data to verify the applicant's income and employment status
 - Calculates debt-to-income ratio
 - Returns income verification results
 
@@ -127,6 +133,7 @@ You can customize the workflow by:
 - Adjusting the Step Functions workflow definition
 - Adding additional steps or parallel branches
 - Implementing actual notification mechanisms
+- Replacing the in-memory customer data service with a DynamoDB-backed service
 
 ## License
 

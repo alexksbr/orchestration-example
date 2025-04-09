@@ -14,6 +14,12 @@ export class OrchestrationExampleStack extends cdk.Stack {
     // The code that defines your stack goes here
 
     // Lambda Functions
+    const customerDataFunction = new nodejs.NodejsFunction(this, 'CustomerDataFunction', {
+      entry: path.join(__dirname, '../src/lambdas/customer-data/index.ts'),
+      handler: 'handler',
+      runtime: lambda.Runtime.NODEJS_18_X,
+    });
+
     const validationFunction = new nodejs.NodejsFunction(this, 'ValidationFunction', {
       entry: path.join(__dirname, '../src/lambdas/validation/index.ts'),
       handler: 'handler',
@@ -51,19 +57,60 @@ export class OrchestrationExampleStack extends cdk.Stack {
     });
 
     // Step Functions Definition
+    // First, fetch customer data
+    const fetchCustomerData = new tasks.LambdaInvoke(this, 'Fetch Customer Data', {
+      lambdaFunction: customerDataFunction,
+      resultPath: '$.customerDataResult',
+      payload: sfn.TaskInput.fromObject({
+        customerId: sfn.JsonPath.stringAt('$.customerId'),
+        action: 'get'
+      }),
+    });
+
+    // Extract customer data from the Lambda response
+    const extractCustomerData = new sfn.Pass(this, 'Extract Customer Data', {
+      parameters: {
+        'applicationId': sfn.JsonPath.stringAt('$.applicationId'),
+        'customerId': sfn.JsonPath.stringAt('$.customerId'),
+        'amount': sfn.JsonPath.numberAt('$.amount'),
+        'term': sfn.JsonPath.numberAt('$.term'),
+        'purpose': sfn.JsonPath.stringAt('$.purpose'),
+        'customerData': sfn.JsonPath.stringAt('$.customerDataResult.Payload.customerData')
+      }
+    });
+
     const validateApplication = new tasks.LambdaInvoke(this, 'Validate Application', {
       lambdaFunction: validationFunction,
       resultPath: '$.validationResult',
+      inputPath: '$',
+    });
+
+    // Prepare data for credit check
+    const prepareCreditCheck = new sfn.Pass(this, 'Prepare Credit Check', {
+      parameters: {
+        'customerId': sfn.JsonPath.stringAt('$.customerId'),
+        'customerData': sfn.JsonPath.stringAt('$.customerData')
+      }
     });
 
     const checkCredit = new tasks.LambdaInvoke(this, 'Check Credit', {
       lambdaFunction: creditCheckFunction,
       resultPath: '$.creditCheckResult',
+      inputPath: '$',
+    });
+
+    // Prepare data for income verification
+    const prepareIncomeVerification = new sfn.Pass(this, 'Prepare Income Verification', {
+      parameters: {
+        'customerId': sfn.JsonPath.stringAt('$.customerId'),
+        'customerData': sfn.JsonPath.stringAt('$.customerData')
+      }
     });
 
     const verifyIncome = new tasks.LambdaInvoke(this, 'Verify Income', {
       lambdaFunction: incomeVerificationFunction,
       resultPath: '$.incomeVerificationResult',
+      inputPath: '$',
     });
 
     // Create a Pass state to prepare data for risk assessment
@@ -107,12 +154,20 @@ export class OrchestrationExampleStack extends cdk.Stack {
     });
 
     // Workflow Definition
-    const definition = validateApplication
+    const definition = fetchCustomerData
+      .next(extractCustomerData)
+      .next(validateApplication)
       .next(new sfn.Choice(this, 'Is Application Valid?')
         .when(sfn.Condition.booleanEquals('$.validationResult.Payload.isValid', true), 
           new sfn.Parallel(this, 'Parallel Processing')
-            .branch(checkCredit)
-            .branch(verifyIncome)
+            .branch(
+              prepareCreditCheck
+                .next(checkCredit)
+            )
+            .branch(
+              prepareIncomeVerification
+                .next(verifyIncome)
+            )
             .next(prepareRiskAssessment)
             .next(assessRisk)
             .next(makeLoanDecision)

@@ -16,14 +16,17 @@ export interface ValidationResult {
 
 export interface CreditCheckResult {
   creditScore: number;
+  creditRating: 'Excellent' | 'Good' | 'Fair' | 'Poor';
   hasBankruptcy: boolean;
   outstandingLoans: number;
+  lastUpdated: string;
 }
 
 export interface IncomeVerificationResult {
-  isVerified: boolean;
-  verifiedAnnualIncome: number;
   employmentVerified: boolean;
+  verifiedAnnualIncome: number;
+  debtToIncomeRatio: number;
+  verificationDate: string;
 }
 
 export interface RiskAssessmentResult {
@@ -43,4 +46,27 @@ export interface NotificationResult {
   sent: boolean;
   channel: 'email' | 'sms' | 'both';
   timestamp: string;
+}
+
+export interface CustomerData {
+  customerId: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone: string;
+  address: string;
+  dateOfBirth: string;
+  ssn: string;
+  employmentStatus: string;
+  annualIncome: number;
+  monthlyExpenses: number;
+  creditScore: number;
+  hasBankruptcy: boolean;
+  outstandingLoans: number;
+}
+
+export interface CustomerDataResult {
+  success: boolean;
+  customerData?: CustomerData;
+  error?: string;
 } 
