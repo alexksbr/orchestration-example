@@ -13,7 +13,8 @@ The workflow simulates a loan application process with the following steps:
    - **Income Verification** - Verifies the applicant's income and employment
 4. **Risk Assessment** - Evaluates the overall risk based on credit and income data
 5. **Loan Decision** - Makes the final approval decision
-6. **Notification** - Sends the result to the applicant
+6. **Loan History Update** - Updates the customer's loan history
+7. **Notification** - Sends the result to the applicant
 
 ## Project Structure
 
@@ -29,6 +30,7 @@ The workflow simulates a loan application process with the following steps:
 │   │   ├── income-verification/ # Income verification
 │   │   ├── risk-assessment/  # Risk assessment
 │   │   ├── loan-decision/    # Loan decision
+│   │   ├── loan-history/     # Loan history microservice
 │   │   └── notification/     # Notification
 │   └── types/                # Shared type definitions
 ├── test/                     # Test files
@@ -115,6 +117,13 @@ After deployment, you can test the workflow in the AWS Step Functions console:
 - Sets loan terms if approved
 - Provides rejection reason if declined
 
+### Loan History Service
+- Acts as a stateful microservice storing loan application history
+- Records all loan applications and their outcomes
+- Provides historical data for future loan decisions
+- In a real implementation, this would be a DynamoDB-backed service
+- Currently uses an in-memory database for demonstration purposes
+
 ### Notification
 - Sends the result to the applicant
 - Simulates email/SMS notification
@@ -133,7 +142,7 @@ You can customize the workflow by:
 - Adjusting the Step Functions workflow definition
 - Adding additional steps or parallel branches
 - Implementing actual notification mechanisms
-- Replacing the in-memory customer data service with a DynamoDB-backed service
+- Replacing the in-memory services with DynamoDB-backed services
 
 ## License
 

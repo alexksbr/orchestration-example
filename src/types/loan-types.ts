@@ -69,4 +69,23 @@ export interface CustomerDataResult {
   success: boolean;
   customerData?: CustomerData;
   error?: string;
+}
+
+export interface LoanHistory {
+  loanId: string;
+  customerId: string;
+  amount: number;
+  term: number;
+  purpose: string;
+  status: 'Approved' | 'Rejected';
+  applicationDate: string;
+  decisionDate: string;
+  interestRate?: number;
+  reason?: string;
+}
+
+export interface LoanHistoryResult {
+  success: boolean;
+  loanHistory?: LoanHistory[];
+  error?: string;
 } 
