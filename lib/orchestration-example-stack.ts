@@ -3,24 +3,23 @@ import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as sfn from 'aws-cdk-lib/aws-stepfunctions';
 import * as tasks from 'aws-cdk-lib/aws-stepfunctions-tasks';
 import * as nodejs from 'aws-cdk-lib/aws-lambda-nodejs';
-import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import { Construct } from 'constructs';
 import * as path from 'path';
+import { LoanHistoryServiceStack } from './loan-history-service-stack';
 // import * as sqs from 'aws-cdk-lib/aws-sqs';
 
+export interface OrchestrationExampleStackProps extends cdk.StackProps {
+  loanHistoryService?: LoanHistoryServiceStack;
+}
+
 export class OrchestrationExampleStack extends cdk.Stack {
-  constructor(scope: Construct, id: string, props?: cdk.StackProps) {
+  constructor(scope: Construct, id: string, props?: OrchestrationExampleStackProps) {
     super(scope, id, props);
 
     // The code that defines your stack goes here
 
-    // Create DynamoDB table for loan history
-    const loanHistoryTable = new dynamodb.Table(this, 'LoanHistoryTable', {
-      partitionKey: { name: 'customerId', type: dynamodb.AttributeType.STRING },
-      sortKey: { name: 'loanId', type: dynamodb.AttributeType.STRING },
-      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
-      removalPolicy: cdk.RemovalPolicy.DESTROY, // For development purposes, in production you might want to use RETAIN
-    });
+    // Create the loan history service stack if not provided
+    const loanHistoryService = props?.loanHistoryService || new LoanHistoryServiceStack(this, 'LoanHistoryService');
 
     // Lambda Functions
     const customerDataFunction = new nodejs.NodejsFunction(this, 'CustomerDataFunction', {
@@ -58,32 +57,6 @@ export class OrchestrationExampleStack extends cdk.Stack {
       handler: 'handler',
       runtime: lambda.Runtime.NODEJS_18_X,
     });
-
-    // Loan History Update Lambda
-    const loanHistoryUpdateLambda = new nodejs.NodejsFunction(this, 'LoanHistoryUpdateFunction', {
-      entry: path.join(__dirname, '../src/lambdas/loan-history-service/loan-history-update/index.ts'),
-      handler: 'handler',
-      runtime: lambda.Runtime.NODEJS_18_X,
-      environment: {
-        LOAN_HISTORY_TABLE: loanHistoryTable.tableName,
-      },
-    });
-
-    // Grant DynamoDB permissions to the update Lambda
-    loanHistoryTable.grantWriteData(loanHistoryUpdateLambda);
-
-    // Loan History Retrieval Lambda
-    const loanHistoryRetrievalLambda = new nodejs.NodejsFunction(this, 'LoanHistoryRetrievalFunction', {
-      entry: path.join(__dirname, '../src/lambdas/loan-history-service/loan-history-retrieval/index.ts'),
-      handler: 'handler',
-      runtime: lambda.Runtime.NODEJS_18_X,
-      environment: {
-        LOAN_HISTORY_TABLE: loanHistoryTable.tableName,
-      },
-    });
-
-    // Grant DynamoDB permissions to the retrieval Lambda
-    loanHistoryTable.grantReadData(loanHistoryRetrievalLambda);
 
     const notificationFunction = new nodejs.NodejsFunction(this, 'NotificationFunction', {
       entry: path.join(__dirname, '../src/lambdas/notification/index.ts'),
@@ -179,7 +152,7 @@ export class OrchestrationExampleStack extends cdk.Stack {
 
     // Add loan history retrieval task to the workflow
     const retrieveLoanHistory = new tasks.LambdaInvoke(this, 'Retrieve Loan History', {
-      lambdaFunction: loanHistoryRetrievalLambda,
+      lambdaFunction: loanHistoryService.loanHistoryRetrievalLambda,
       resultPath: '$.loanHistoryResult',
       payload: sfn.TaskInput.fromObject({
         customerId: sfn.JsonPath.stringAt('$.application.customerId')
@@ -188,7 +161,7 @@ export class OrchestrationExampleStack extends cdk.Stack {
 
     // Update loan history
     const updateLoanHistory = new tasks.LambdaInvoke(this, 'Update Loan History', {
-      lambdaFunction: loanHistoryUpdateLambda,
+      lambdaFunction: loanHistoryService.loanHistoryUpdateLambda,
       resultPath: '$.loanHistoryUpdateResult',
       payload: sfn.TaskInput.fromObject({
         customerId: sfn.JsonPath.stringAt('$.application.customerId'),
