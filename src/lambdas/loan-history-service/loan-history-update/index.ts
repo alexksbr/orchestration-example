@@ -1,7 +1,7 @@
 import { 
   LoanHistory,
   LoanHistoryResult
-} from '../../types/loan-types';
+} from '../../../types/loan-types';
 
 // In-memory database (in a real implementation, this would be a DynamoDB table)
 const loanHistoryDatabase: Record<string, LoanHistory[]> = {
@@ -90,7 +90,7 @@ export const handler = async (event: LoanHistoryEvent): Promise<LoanHistoryResul
         : loanData.status,
       applicationDate: loanData.applicationDate || new Date().toISOString().split('T')[0],
       decisionDate: loanData.decisionDate || new Date().toISOString().split('T')[0],
-      interestRate: loanData.interestRate,
+      interestRate: loanData.interestRate || undefined,
       reason: loanData.reason
     };
     

@@ -50,16 +50,16 @@ export class OrchestrationExampleStack extends cdk.Stack {
       runtime: lambda.Runtime.NODEJS_18_X,
     });
 
-    // Loan History Lambda
-    const loanHistoryLambda = new nodejs.NodejsFunction(this, 'LoanHistoryFunction', {
-      entry: path.join(__dirname, '../src/lambdas/loan-history/index.ts'),
+    // Loan History Update Lambda
+    const loanHistoryUpdateLambda = new nodejs.NodejsFunction(this, 'LoanHistoryUpdateFunction', {
+      entry: path.join(__dirname, '../src/lambdas/loan-history-service/loan-history-update/index.ts'),
       handler: 'handler',
       runtime: lambda.Runtime.NODEJS_18_X,
     });
 
     // Loan History Retrieval Lambda
     const loanHistoryRetrievalLambda = new nodejs.NodejsFunction(this, 'LoanHistoryRetrievalFunction', {
-      entry: path.join(__dirname, '../src/lambdas/loan-history-retrieval/index.ts'),
+      entry: path.join(__dirname, '../src/lambdas/loan-history-service/loan-history-retrieval/index.ts'),
       handler: 'handler',
       runtime: lambda.Runtime.NODEJS_18_X,
     });
@@ -103,6 +103,10 @@ export class OrchestrationExampleStack extends cdk.Stack {
     const prepareCreditCheck = new sfn.Pass(this, 'Prepare Credit Check', {
       parameters: {
         'customerId': sfn.JsonPath.stringAt('$.customerId'),
+        'amount': sfn.JsonPath.numberAt('$.amount'),
+        'term': sfn.JsonPath.numberAt('$.term'),
+        'purpose': sfn.JsonPath.stringAt('$.purpose'),
+        'applicationId': sfn.JsonPath.stringAt('$.applicationId'),
         'customerData': sfn.JsonPath.stringAt('$.customerData')
       }
     });
@@ -117,6 +121,10 @@ export class OrchestrationExampleStack extends cdk.Stack {
     const prepareIncomeVerification = new sfn.Pass(this, 'Prepare Income Verification', {
       parameters: {
         'customerId': sfn.JsonPath.stringAt('$.customerId'),
+        'amount': sfn.JsonPath.numberAt('$.amount'),
+        'term': sfn.JsonPath.numberAt('$.term'),
+        'purpose': sfn.JsonPath.stringAt('$.purpose'),
+        'applicationId': sfn.JsonPath.stringAt('$.applicationId'),
         'customerData': sfn.JsonPath.stringAt('$.customerData')
       }
     });
@@ -154,6 +162,25 @@ export class OrchestrationExampleStack extends cdk.Stack {
       resultPath: '$.loanHistoryResult',
       payload: sfn.TaskInput.fromObject({
         customerId: sfn.JsonPath.stringAt('$.application.customerId')
+      })
+    });
+
+    // Update loan history
+    const updateLoanHistory = new tasks.LambdaInvoke(this, 'Update Loan History', {
+      lambdaFunction: loanHistoryUpdateLambda,
+      resultPath: '$.loanHistoryUpdateResult',
+      payload: sfn.TaskInput.fromObject({
+        customerId: sfn.JsonPath.stringAt('$.application.customerId'),
+        action: 'add',
+        loanData: {
+          loanId: sfn.JsonPath.stringAt('$.application.applicationId'),
+          amount: sfn.JsonPath.numberAt('$.application.amount'),
+          term: sfn.JsonPath.numberAt('$.application.term'),
+          purpose: sfn.JsonPath.stringAt('$.application.purpose'),
+          status: sfn.JsonPath.stringAt('$.loanDecision.Payload.approved'),
+          decisionDate: sfn.JsonPath.stringAt('$.loanDecision.Payload.decisionDate'),
+          reason: sfn.JsonPath.stringAt('$.loanDecision.Payload.reason')
+        }
       })
     });
 
@@ -195,6 +222,7 @@ export class OrchestrationExampleStack extends cdk.Stack {
             .next(assessRisk)
             .next(retrieveLoanHistory)
             .next(makeLoanDecision)
+            .next(updateLoanHistory)
             .next(sendNotification))
         .otherwise(
           new tasks.LambdaInvoke(this, 'Notify Validation Failure', {
