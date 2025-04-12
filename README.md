@@ -30,7 +30,10 @@ The workflow simulates a loan application process with the following steps:
 │   │   ├── income-verification/ # Income verification
 │   │   ├── risk-assessment/  # Risk assessment
 │   │   ├── loan-decision/    # Loan decision
-│   │   ├── loan-history/     # Loan history microservice
+│   │   ├── loan-history-service/ # Loan history microservice
+│   │   │   ├── loan-history-update/ # Update loan history
+│   │   │   ├── loan-history-retrieval/ # Retrieve loan history
+│   │   │   └── populate-table/ # Populate DynamoDB with dummy data
 │   │   └── notification/     # Notification
 │   └── types/                # Shared type definitions
 ├── test/                     # Test files
@@ -121,8 +124,16 @@ After deployment, you can test the workflow in the AWS Step Functions console:
 - Acts as a stateful microservice storing loan application history
 - Records all loan applications and their outcomes
 - Provides historical data for future loan decisions
-- In a real implementation, this would be a DynamoDB-backed service
-- Currently uses an in-memory database for demonstration purposes
+- Implemented as a separate CDK stack for better modularity
+- Uses DynamoDB for persistent storage
+- Includes two Lambda functions:
+  - **Loan History Update**: Adds new loan records to the history
+  - **Loan History Retrieval**: Retrieves loan history for a customer
+- Automatically populated with dummy data upon deployment
+  - Creates 5 sample customers with 3-7 loans each
+  - Includes both approved and rejected loans
+  - Provides realistic loan amounts, terms, and purposes
+  - Generates appropriate approval/rejection reasons
 
 ### Notification
 - Sends the result to the applicant
@@ -143,6 +154,39 @@ You can customize the workflow by:
 - Adding additional steps or parallel branches
 - Implementing actual notification mechanisms
 - Replacing the in-memory services with DynamoDB-backed services
+
+## Loan History Service Details
+
+The Loan History Service is implemented as a separate CDK stack for better modularity and reusability. It consists of:
+
+1. **DynamoDB Table**:
+   - Partition key: `customerId` (string)
+   - Sort key: `loanId` (string)
+   - Stores loan application history with details like amount, term, purpose, status, etc.
+
+2. **Lambda Functions**:
+   - **Loan History Update**: Adds new loan records to the history
+   - **Loan History Retrieval**: Retrieves loan history for a customer
+   - **Populate Table**: Automatically populates the DynamoDB table with dummy data upon deployment
+
+3. **Custom Resource**:
+   - Runs the populate table Lambda function during stack deployment
+   - Ensures the DynamoDB table is populated with realistic test data
+
+### Dummy Data Population
+
+The Loan History Service automatically populates the DynamoDB table with dummy data upon deployment. This feature:
+
+- Creates 5 sample customers with 3-7 loans each
+- Generates realistic loan data including:
+  - Random loan amounts between $1,000 and $100,000
+  - Random loan terms between 12 and 60 months
+  - Various loan purposes (Home Improvement, Debt Consolidation, Education, etc.)
+  - Both approved and rejected loans (70% approved, 30% rejected)
+  - Appropriate approval/rejection reasons
+  - Realistic application and decision dates within the last 2 years
+
+This allows you to immediately start testing the loan history retrieval functionality without having to manually insert test data.
 
 ## License
 
