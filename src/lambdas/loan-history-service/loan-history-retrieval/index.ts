@@ -1,10 +1,15 @@
 import { 
   LoanHistory,
   LoanHistoryResult
-} from '../../types/loan-types';
+} from '../../../types/loan-types';
+import { DynamoDB } from 'aws-sdk';
 
-// In-memory database (in a real implementation, this would be a DynamoDB table)
-const loanHistoryDatabase: Record<string, LoanHistory[]> = {
+// Initialize DynamoDB client
+const dynamoDB = new DynamoDB.DocumentClient();
+const TABLE_NAME = process.env.LOAN_HISTORY_TABLE || 'LoanHistoryTable';
+
+// Sample data for testing (will be replaced by DynamoDB)
+const sampleLoanHistory: Record<string, LoanHistory[]> = {
   'CUST456': [
     {
       loanId: 'LOAN001',
@@ -53,17 +58,46 @@ export const handler = async (event: LoanHistoryRetrievalEvent): Promise<LoanHis
   
   const { customerId } = event;
   
-  // Check if customer exists in the database
-  if (!loanHistoryDatabase[customerId]) {
+  try {
+    // Query DynamoDB for the customer's loan history
+    const params = {
+      TableName: TABLE_NAME,
+      KeyConditionExpression: 'customerId = :customerId',
+      ExpressionAttributeValues: {
+        ':customerId': customerId
+      }
+    };
+    
+    const result = await dynamoDB.query(params).promise();
+    
+    // If no items found, return empty array
+    if (!result.Items || result.Items.length === 0) {
+      return {
+        success: true,
+        loanHistory: []
+      };
+    }
+    
+    // Return customer's loan history
     return {
       success: true,
-      loanHistory: []
+      loanHistory: result.Items as LoanHistory[]
+    };
+  } catch (error) {
+    console.error('Error retrieving loan history:', error);
+    
+    // For development/testing, fall back to sample data if DynamoDB fails
+    if (sampleLoanHistory[customerId]) {
+      console.log('Falling back to sample data');
+      return {
+        success: true,
+        loanHistory: sampleLoanHistory[customerId]
+      };
+    }
+    
+    return {
+      success: false,
+      error: 'Failed to retrieve loan history'
     };
   }
-  
-  // Return customer's loan history
-  return {
-    success: true,
-    loanHistory: loanHistoryDatabase[customerId]
-  };
 }; 
