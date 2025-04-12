@@ -50,8 +50,16 @@ export class OrchestrationExampleStack extends cdk.Stack {
       runtime: lambda.Runtime.NODEJS_18_X,
     });
 
-    const loanHistoryFunction = new nodejs.NodejsFunction(this, 'LoanHistoryFunction', {
+    // Loan History Lambda
+    const loanHistoryLambda = new nodejs.NodejsFunction(this, 'LoanHistoryFunction', {
       entry: path.join(__dirname, '../src/lambdas/loan-history/index.ts'),
+      handler: 'handler',
+      runtime: lambda.Runtime.NODEJS_18_X,
+    });
+
+    // Loan History Retrieval Lambda
+    const loanHistoryRetrievalLambda = new nodejs.NodejsFunction(this, 'LoanHistoryRetrievalFunction', {
+      entry: path.join(__dirname, '../src/lambdas/loan-history-retrieval/index.ts'),
       handler: 'handler',
       runtime: lambda.Runtime.NODEJS_18_X,
     });
@@ -140,22 +148,12 @@ export class OrchestrationExampleStack extends cdk.Stack {
       inputPath: '$',
     });
 
-    // Update loan history
-    const updateLoanHistory = new tasks.LambdaInvoke(this, 'Update Loan History', {
-      lambdaFunction: loanHistoryFunction,
+    // Add loan history retrieval task to the workflow
+    const retrieveLoanHistory = new tasks.LambdaInvoke(this, 'Retrieve Loan History', {
+      lambdaFunction: loanHistoryRetrievalLambda,
       resultPath: '$.loanHistoryResult',
       payload: sfn.TaskInput.fromObject({
-        customerId: sfn.JsonPath.stringAt('$.application.customerId'),
-        action: 'add',
-        loanData: {
-          loanId: sfn.JsonPath.stringAt('$.application.customerId'),
-          amount: sfn.JsonPath.numberAt('$.application.customerData.annualIncome'),
-          term: 12,
-          purpose: 'Loan Application',
-          status: sfn.JsonPath.stringAt('$.loanDecision.Payload.approved'),
-          applicationDate: sfn.JsonPath.stringAt('$.application.customerData.dateOfBirth'),
-          decisionDate: new Date().toISOString().split('T')[0]
-        }
+        customerId: sfn.JsonPath.stringAt('$.application.customerId')
       })
     });
 
@@ -195,8 +193,8 @@ export class OrchestrationExampleStack extends cdk.Stack {
             )
             .next(prepareRiskAssessment)
             .next(assessRisk)
+            .next(retrieveLoanHistory)
             .next(makeLoanDecision)
-            .next(updateLoanHistory)
             .next(sendNotification))
         .otherwise(
           new tasks.LambdaInvoke(this, 'Notify Validation Failure', {

@@ -36,10 +36,13 @@ export interface RiskAssessmentResult {
 }
 
 export interface LoanDecision {
+  applicationId: string;
+  customerId: string;
   approved: boolean;
-  maxAmount?: number;
+  maxLoanAmount?: number;
   interestRate?: number;
-  reason?: string;
+  decisionDate: string;
+  reason: string;
 }
 
 export interface NotificationResult {
